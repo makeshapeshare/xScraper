@@ -3,6 +3,8 @@ var exports = module.exports = {};
 var mongoose = require('mongoose');
 var tick = require('./ticker.js');
 import BTCUSDRecord from './models/model_Record';
+import BTCUSDLine from './models/model_Line';
+import BTCUSDThread from './models/model_Thread';
 
 
 //var BTCUSDHistory = mongoose.model('BTCUSDHistory');
@@ -34,4 +36,20 @@ exports.startLine = function(req, res) {
   } else{
     res.send('Line Start Error');
   }
+};
+
+exports.getLines = function(req, res) {
+  BTCUSDLine.find({}, function(err, lines) {
+    if (err)
+      res.send(err);
+    res.json(lines);
+  });
+};
+
+exports.getThreads = function(req, res) {
+  BTCUSDThread.find({}, function(err, threads) {
+    if (err)
+      res.send(err);
+    res.json(threads);
+  });
 };

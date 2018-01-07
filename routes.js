@@ -8,5 +8,9 @@ module.exports = function(app){
 	//app.route('/records/:recordId').get(xScraperController.getRecordId);
 
 	app.route('/lines/start').get(xScraperController.startLine);
+
+	app.route('/lines').get(xScraperController.getLines);
+
+	app.route('/threads').get(xScraperController.getThreads);
 }
 
