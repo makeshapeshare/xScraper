@@ -1,6 +1,7 @@
 var exports = module.exports = {};
 
 var mongoose = require('mongoose');
+var CEX = require('./cex.js');
 var tick = require('./ticker.js');
 import BTCUSDRecord from './models/model_Record';
 import BTCUSDLine from './models/model_Line';
@@ -11,6 +12,12 @@ import BTCUSDThread from './models/model_Thread';
 
 exports.getHome = function(req, res) {
   res.send('Hello Louis.');
+};
+
+exports.getAccount = function(req, res) {
+  CEX.getAccountBalance().then((acc) => {
+    res.json(acc);
+  });
 };
 
 exports.getRecords = function(req, res) {
@@ -46,10 +53,24 @@ exports.getLines = function(req, res) {
   });
 };
 
+exports.getLineThreads = function(req, res) {
+  BTCUSDThread.find({parent:req.params.lineId}, function(err, threads) {
+    if (err)
+      res.send(err);
+    res.json(threads);
+  });
+};
+
 exports.getThreads = function(req, res) {
   BTCUSDThread.find({}, function(err, threads) {
     if (err)
       res.send(err);
     res.json(threads);
+  });
+};
+
+exports.getPriceBTCUSD = function(req, res) {
+  CEX.BTC_LastPrice().then((priceRes) => {
+    res.json(priceRes);
   });
 };

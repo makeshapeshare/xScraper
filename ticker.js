@@ -337,7 +337,8 @@ var startLine = function(price){
     var ind = 0;
     var xLimit = app.get("limit");
     //var xAmt = app.get("amount");
-    var xAmt = 0.012 * price;
+    //var xAmt = 0.012 * price;
+    var xAmt = 0.003 * price;
     var xCurrency = app.get("currency");
 
     var mylines = app.get("lines");
@@ -736,7 +737,7 @@ var buy = function(line, price){
       //define thread object
       //var xLimit = app.get("limit");
       //var xAmt = app.get("amount"); //deprecated
-      var xAmt = 0.012 * price;
+      var xAmt = 0.003 * price;
       var xCurrency = app.get("currency");
       var updatedDate = new Date();
 
