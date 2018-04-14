@@ -18,7 +18,7 @@ var ticker = require('./ticker');
 
 var express = require('express'),
   app = express(),
-  port = process.env.PORT || 3000,
+  port = 3000, //process.env.PORT || 3000,
   mongoose = require('mongoose'),
   Task = require('./controller'), //created model loading here
   bodyParser = require('body-parser');
