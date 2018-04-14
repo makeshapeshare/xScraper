@@ -1,4 +1,7 @@
-import mongoose, { Schema } from 'mongoose';
+//import mongoose, { Schema } from 'mongoose';
+
+var mongoose = require('mongoose');
+var Schema = mongoose.Schema;
 
 // Define threads schema
 var BTCUSDThreadSchema = new Schema({
@@ -23,4 +26,6 @@ var BTCUSDThreadSchema = new Schema({
   updated: Date
 });
 
-export default mongoose.model('BTCUSDThread', BTCUSDThreadSchema);
+module.exports = mongoose.model('BTCUSDThread', BTCUSDThreadSchema);
+
+//export default mongoose.model('BTCUSDThread', BTCUSDThreadSchema);

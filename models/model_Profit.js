@@ -1,4 +1,7 @@
-import mongoose, { Schema } from 'mongoose';
+//import mongoose, { Schema } from 'mongoose';
+
+var mongoose = require('mongoose');
+var Schema = mongoose.Schema;
 
 // Define profits schema
 var BTCUSDProfitSchema = new Schema({
@@ -15,4 +18,6 @@ var BTCUSDProfitSchema = new Schema({
   updated: Date
 });
 
-export default mongoose.model('BTCUSDProfit', BTCUSDProfitSchema);
+module.exports = mongoose.model('BTCUSDProfit', BTCUSDProfitSchema);
+
+//export default mongoose.model('BTCUSDProfit', BTCUSDProfitSchema);

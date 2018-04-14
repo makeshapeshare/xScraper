@@ -1,4 +1,8 @@
-import mongoose, { Schema } from 'mongoose';
+
+//import mongoose, { Schema } from 'mongoose';
+
+var mongoose = require('mongoose');
+var Schema = mongoose.Schema;
 
 // Define average schema
 var BTCUSDAveSchema = new Schema({
@@ -8,4 +12,6 @@ var BTCUSDAveSchema = new Schema({
   updated: Date,
 });
 
-export default mongoose.model('BTCUSDAve', BTCUSDAveSchema);
+module.exports = mongoose.model('BTCUSDAve', BTCUSDAveSchema);
+
+//export default mongoose.model('BTCUSDAve', BTCUSDAveSchema);

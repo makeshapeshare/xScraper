@@ -3,9 +3,15 @@ var exports = module.exports = {};
 var mongoose = require('mongoose');
 var CEX = require('./cex.js');
 var tick = require('./ticker.js');
+
+/*
 import BTCUSDRecord from './models/model_Record';
 import BTCUSDLine from './models/model_Line';
 import BTCUSDThread from './models/model_Thread';
+*/
+var BTCUSDRecord = require('./models/model_Record');
+var BTCUSDLine = require('./models/model_Line');
+var BTCUSDThread = require('./models/model_Thread');
 
 
 //var BTCUSDHistory = mongoose.model('BTCUSDHistory');

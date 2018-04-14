@@ -6,12 +6,23 @@
 //express.js
 //moment.js
 
+
+/*
 import moment from 'moment';
 import BTCUSDRecord from './models/model_Record';
 import BTCUSDAve from './models/model_Ave';
 import BTCUSDLine from './models/model_Line';
 import BTCUSDThread from './models/model_Thread';
 import BTCUSDProfit from './models/model_Profit';
+*/
+
+var moment = require('moment');
+var BTCUSDRecord = require('./models/model_Record');
+var BTCUSDAve = require('./models/model_Ave');
+var BTCUSDLine = require('./models/model_Line');
+var BTCUSDThread = require('./models/model_Thread');
+var BTCUSDProfit = require('./models/model_Profit');
+
 
 var CEX = require('./cex.js');
 var express = require('express');

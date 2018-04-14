@@ -1,4 +1,7 @@
-import mongoose, { Schema } from 'mongoose';
+//import mongoose, { Schema } from 'mongoose';
+
+var mongoose = require('mongoose');
+var Schema = mongoose.Schema;
 
 // Define lines schema
 var BTCUSDLineSchema = new Schema({
@@ -15,4 +18,6 @@ var BTCUSDLineSchema = new Schema({
   updated: Date
 });
 
-export default mongoose.model('BTCUSDLine', BTCUSDLineSchema);
+module.exports = mongoose.model('BTCUSDLine', BTCUSDLineSchema);
+
+//export default mongoose.model('BTCUSDLine', BTCUSDLineSchema);
