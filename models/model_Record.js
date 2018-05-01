@@ -5,7 +5,7 @@ var Schema = mongoose.Schema;
 
 // Define record history schema
 var BTCUSDRecordSchema = new Schema({
-  id: String,
+  id: Number,
   price: Number,
   currency: String,
   updated: Date,

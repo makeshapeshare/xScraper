@@ -6,7 +6,7 @@ var Schema = mongoose.Schema;
 
 // Define average schema
 var BTCUSDAveSchema = new Schema({
-  id: String,
+  id: Number,
   price: Number,
   currency: String,
   updated: Date,
