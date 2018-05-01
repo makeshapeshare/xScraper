@@ -6,16 +6,6 @@
 //express.js
 //moment.js
 
-
-/*
-import moment from 'moment';
-import BTCUSDRecord from './models/model_Record';
-import BTCUSDAve from './models/model_Ave';
-import BTCUSDLine from './models/model_Line';
-import BTCUSDThread from './models/model_Thread';
-import BTCUSDProfit from './models/model_Profit';
-*/
-
 var moment = require('moment');
 var BTCUSDRecord = require('./models/model_Record');
 var BTCUSDAve = require('./models/model_Ave');
@@ -40,7 +30,6 @@ app.set('thisHr', 0);
 app.set('thisMin', 0);
 app.set('thisSec', 0);
 
-app.set('records', []);
 app.set('aggregates', []);
 app.set('lines', []);
 app.set('threads', []);
@@ -54,13 +43,12 @@ app.set('totalSeed', 0);
 app.set('totalThreadValue', 0);
 app.set('totalProfits', 0);
 
-app.set('limit', 0.01);
-app.set('amount', 100);
+app.set('limit', 0.05);
+app.set('baseAmount', 50);
 
 //========================= GENERAL ============================
 
-var idGenerator = function(inputDate){
-    var id;
+var dateGen = function(inputDate){
     var input = moment(inputDate);
     
     var idA = input.year();
@@ -87,15 +75,29 @@ var idGenerator = function(inputDate){
       idF = "0".concat(idF.toString());
     }
     //console.log("year: " + idA.toString() + " month: " + idB.toString() + " day: " + idC.toString() + " hour: " + idD.toString() + " minute: " + idE.toString());
-    app.set('thisYr', idA);
-    app.set('thisMth', idB);
-	  app.set('thisDay', idC);
-	  app.set('thisHr', idD);
-	  app.set('thisMin', idE);
-	  app.set('thisSec', idF);
+    var output = {
+      thisYr: idA,
+      thisMth: idB,
+      thisDay: idC,
+      thisHr: idD,
+      thisMin: idE,
+      thisSec: idF
+    };
+    return output;
+};
 
-    id = idA.toString().concat(idB,idC,idD,idE,idF);
+var idGenerator = function(inputDate){
     
+    var thisDate = dateGen(inputDate);
+    app.set('thisYr', thisDate.thisYr);
+    app.set('thisMth', thisDate.thisMth);
+	  app.set('thisDay', thisDate.thisDay);
+	  app.set('thisHr', thisDate.thisHr);
+	  app.set('thisMin', thisDate.thisMin);
+	  app.set('thisSec', thisDate.thisSec);
+
+    var id = thisDate.thisYr.toString().concat(thisDate.thisMth,thisDate.thisDay,thisDate.thisHr,thisDate.thisMin,thisDate.thisSec);
+    console.log("id gen: ",id);
     return id;
 };
 
@@ -105,8 +107,9 @@ var idGenerator = function(inputDate){
 var saveRecord = function(){
 	CEX.BTC_LastPrice().then((res) => {
 		console.log('market price',res);
-		var genID = idGenerator(updated);
 		var updated = new Date();
+    var genID = parseInt(idGenerator(updated));
+		
 		var data = {
 			id: genID,
 			price: res.lprice,
@@ -114,9 +117,7 @@ var saveRecord = function(){
 			updated: updated
 		}
 		
-		//console.log('data',data);
-
-		var record = new BTCUSDRecord(data);
+    var record = new BTCUSDRecord(data);
 		record.save();
 
 		app.set('currentPrice', res.lprice);
@@ -125,27 +126,33 @@ var saveRecord = function(){
 
 //check database
 var checkDatabase = function(){
-    BTCUSDRecord.find(function (err, records) {
-	  if (err) return console.error(err);
-	  //console.log("records",records);
-	  app.set('records', records);
-	  aggregateData(records);
+    //get current datetime
+    //e.g format 2018|05|01|15|09|23
+    var today = new Date();
+    var thisDate = dateGen(today);
+    var upperLim = parseInt(thisDate.thisYr.toString().concat(thisDate.thisMth,thisDate.thisDay,"23","59","59"));
+    var lowerLim = parseInt(thisDate.thisYr.toString().concat(thisDate.thisMth,thisDate.thisDay,"00","00","00"));
+    //only return 2 days
+    BTCUSDRecord.find( {id: {$gt: lowerLim, $lt: upperLim}},function (err, records) {
+    if (err) return console.error(err);
+    
+    aggregateData(records);
+    
     //get aggregates when done
-    BTCUSDAve.find(function (err, aggregates) {
+    var aveUppLim = parseInt(thisDate.thisYr.toString().concat(thisDate.thisMth,thisDate.thisDay,"23"));
+    var aveLowLim = parseInt(thisDate.thisYr.toString().concat(thisDate.thisMth,thisDate.thisDay,"00"));
+    BTCUSDAve.find({id: {$gt: aveLowLim, $lt: aveUppLim}},function (err, aggregates) {
       if (err) return console.error(err);
-      //console.log("aggregates",aggregates);
       app.set('aggregates', aggregates);
 
       //get lines when done
       BTCUSDLine.find(function (err, lines) {
         if (err) return console.error(err);
-        console.log("lines",lines);
         app.set('lines', lines);
 
         //get threads when done
         BTCUSDThread.find(function (err, threads) {
           if (err) return console.error(err);
-          console.log("threads",threads);
           app.set('threads', threads);
           
           //========================ANALYSE DATA=============================
@@ -155,18 +162,16 @@ var checkDatabase = function(){
 
         });
         //finished get threads
-
       });
       //finished get lines
     });
     //finished get aggregates
-	});
+  });
   //profits non critical
-	BTCUSDProfit.find(function (err, profits) {
-	  if (err) return console.error(err);
-	  console.log("profits",profits);
-	  app.set('profits', profits);
-	});
+  BTCUSDProfit.find(function (err, profits) {
+    if (err) return console.error(err);
+    app.set('profits', profits);
+  });
   
 };
 
@@ -174,41 +179,31 @@ var checkDatabase = function(){
 
 var aggregateData = function(data){
     //console.log("retrieved data",data);
+    //only 1 day returned from data records
     var exist = false;
     var hourSet = [];
     var daySet = [];
-    var monthSet = [];
     var hourSum = 0;
     var daySum = 0;
-    var monthSum = 0;
     
     var checkYear = app.get('thisYr');
     var checkMonth = app.get('thisMth');
     var checkDate = app.get('thisDay');
     var checkHour = app.get('thisHr');
-    var checkMinute = app.get('thisMin');
-    //var checkSecond = app.get('thisSec');
-
+    
     if (data && data.length){
       for (var i = 0; i < data.length; i++) { 
-        var dataID = data[i].id;
+        var dataID = data[i].id.toString();
         var dataYear = dataID.substr(0, 4);
         var dataMonth = dataID.substr(4, 2);
         var dataDate = dataID.substr(6, 2);
         var dataHour = dataID.substr(8, 2);
-        //var dataMinute = dataID.substr(10, 2);
-        //var dataSecond = dataID.substr(12, 2);
-
+        
         if (dataYear == checkYear && dataMonth == checkMonth && dataDate == checkDate && dataHour == checkHour){
           hourSet.push(data[i]);
         }
-
         if (dataYear == checkYear && dataMonth == checkMonth && dataDate == checkDate){
           daySet.push(data[i]);
-        }
-
-        if (dataYear == checkYear && dataMonth == checkMonth){
-          monthSet.push(data[i]);
         }
       }
 
@@ -221,64 +216,52 @@ var aggregateData = function(data){
       for (var i = 0; i < daySet.length; i++) { 
         daySum = daySum + daySet[i].price;
       }
+      
+      if (hourSum != 0 && daySum != 0){
+        var hourAve = hourSum/hourSet.length;
+        var dayAve = daySum/daySet.length;
 
-      //perform month aggregation
-      for (var i = 0; i < monthSet.length; i++) { 
-        monthSum = monthSum + monthSet[i].price;
-      }
-      //console.log("hour sum: " + hourSum.toFixed(2) + ", day sum: " + daySum.toFixed(2) + ", month sum: " + monthSum.toFixed(2));
-      if (hourSum != 0 && daySum != 0 && monthSum != 0){
-      	  var hourAve = hourSum/hourSet.length;
-	      var dayAve = daySum/daySet.length;
-	      var monthAve = monthSum/monthSet.length;
+        //check if existing data on average hour
+        //if yes, update. if not, add. 
+        var hrId = checkYear.toString().concat(checkMonth.toString(),checkDate.toString(),checkHour.toString());
 
-	      //check if existing data on average hour
-	      //if yes, update. if not, add. 
-	      var hrId = checkYear.toString().concat(checkMonth.toString(),checkDate.toString(),checkHour.toString());
+        var checkAggregates = app.get('aggregates');
+        if(checkAggregates == null || checkAggregates.length == 0){
+          exist = false;
+        } else if (Array.isArray(checkAggregates) === true && checkAggregates.length > 0){
+          for (var i = 0; i < checkAggregates.length; i++) { 
+            if(checkAggregates[i].id == hrId){
+              exist = true;
+            } 
+          }
+        }
 
-	      var checkAggregates = app.get('aggregates');
-	      if(checkAggregates == null || checkAggregates.length == 0){
-	      	exist = false;
-	      } else if (Array.isArray(checkAggregates) === true && checkAggregates.length > 0){
-	      	for (var i = 0; i < checkAggregates.length; i++) { 
-	            if(checkAggregates[i].id == hrId){
-	              exist = true;
-	            } 
-	        }
-	      }
+        var updatedDate = new Date();
+        var addItem = {
+            id: hrId,
+            price: hourAve,
+            currency: app.get("currency"),
+            updated: updatedDate
+        }
 
-	      var updatedDate = new Date();
-	      var addItem = {
-	          id: hrId,
-	          price: hourAve,
-	          currency: app.get("currency"),
-	          updated: updatedDate
-	      }
+        if(exist === true){
+          //update
+          BTCUSDAve.findOneAndUpdate({id: hrId}, addItem, {new: true}, function(err, agg) {
+        if (err)
+            throw err;
+      });
+        } else {
+          //add
+          var aggregate = new BTCUSDAve(addItem);
+          aggregate.save();
+        }
 
-	      if(exist === true){
-	        //update
-	        BTCUSDAve.findOneAndUpdate({id: hrId}, addItem, {new: true}, function(err, agg) {
-				if (err)
-	        	throw err;
-	        	//console.log("updated aggregate",agg);
-			});
-	      } else {
-	      	//add
-	        var aggregate = new BTCUSDAve(addItem);
-			    aggregate.save();
-	      }
-
-	      app.set('aveMth', monthAve.toFixed(2));
-		    app.set('aveDay', dayAve.toFixed(2));
-		    app.set('aveHr', hourAve.toFixed(2));
-
-	      //console.log("hour ave: " + hourAve.toFixed(2) + ", day ave: " + dayAve.toFixed(2) + ", month ave: " + monthAve.toFixed(2));
+        app.set('aveDay', dayAve.toFixed(2));
+        app.set('aveHr', hourAve.toFixed(2));
       }
       
     }
 };
-
- 
 
 //========================= ANALYSE ============================
 
@@ -310,7 +293,6 @@ var analyseData = function(){
         var thisLine = mylines[j];
         if(thisLine.active === false){
           //inactive thread, decide by trend
-          //console.log("analysing line", thisLine);
           if (analyseTrend() === true){
             //upward trend, buy and start new thread
             console.log("up trend. BUY");
@@ -325,16 +307,15 @@ var analyseData = function(){
       //check for active threads to sell
       for (var i = 0; i < mythreads.length; i++) { 
         var thisThread = mythreads[i];
-        //console.log("analysing thread",thisThread);
         if(thisThread.active === true){
           //active thread, compare thread price
           if (currentPrice > thisThread.startPrice && (currentPrice - thisThread.startPrice) > (thisThread.limit * thisThread.startPrice) ){
             //profit hit, sell
-            console.log("profit. SELL");
+            console.log("profit. SELL", thisThread.id);
             sell(thisThread, currentPrice);
           } else{
             //continue to wait
-            console.log("no profit. WAIT");
+            console.log("no profit. WAIT", thisThread.id);
           }
         } 
       }
@@ -347,9 +328,7 @@ var startLine = function(price){
     var startRes = { status: "initiated" };
     var ind = 0;
     var xLimit = app.get("limit");
-    //var xAmt = app.get("amount");
-    //var xAmt = 0.012 * price;
-    var xAmt = 0.003 * price;
+    var xAmt = app.get("baseAmount");
     var xCurrency = app.get("currency");
 
     var mylines = app.get("lines");
@@ -367,9 +346,8 @@ var startLine = function(price){
         id : genID,
         limit : xLimit,
         startDate : updatedDate,
-        //endDate : null,
         active : true,
-        //amount : xAmt, //deprecated. amount changes to 0.012 of transacted price
+        amount : xAmt, 
         profitToDate : 0,
         averagePeriod : [],
         cycles : 0,
@@ -390,26 +368,18 @@ var startLine = function(price){
   				line: xLine,
   				thread: xThread
   			}
-        //console.log("completed line start",startRes);
-  			
   		}); 
     }
     return startRes;
 };
 
 var startThread = function(line, xAmt, xPrice, xDate, xCurrency){
-    //console.log("starting thread with this line..", line);
-    //test with initial price
-    //var testPrice = 17000; //CHANGE THIS BACK DURING DEPLOYMENT
-
     if (line && xAmt && xPrice){
       //define thread object
       var thisCycle = parseInt(line.cycles) + 1;
       var checkId = line.id.concat(thisCycle.toString());
       
-      //var buyAmt = 0; //development
       var buyAmt = xAmt; //deployment
-      
       
       //======================CEX BUY========================
       CEX.BTC_placeMarketOrder("buy",buyAmt).then((res) => {
@@ -440,19 +410,13 @@ var startThread = function(line, xAmt, xPrice, xDate, xCurrency){
               id : checkId,
               parent : line.id,
               startDate : xDate,
-              //endDate : null,
               active : true,
               limit : line.limit,
               amount_ : parseFloat(buyData.finAmt),//deployment
-              //amount : parseFloat(xAmt),//development
               amount : parseFloat(buyData.txAmt),//deployment
-              //bitcoin : (xAmt/xPrice),//development
               bitcoin : buyData.BTCAmt,//deployment
-              //startPrice : xPrice, //development
               startPrice : buyData.txPrice, //deployment
               startTixPrice : xPrice,
-              //exitAmount : null,
-              //endPrice : null,
               profit : 0,
               period: 0,
               cycle : thisCycle,
@@ -510,61 +474,8 @@ var startThread = function(line, xAmt, xPrice, xDate, xCurrency){
 
 //========================= TRADE ============================
 
-var buyCEX = function(buyAmt){
-  var buyAmt = 0; //testing only, to replace with development
-  CEX.BTC_placeMarketOrder("buy",buyAmt).then((res) => {
-    console.log('buy response',res);
-    var orderId = res.orderId;
-
-    CEX.getOrderDetails(orderId).then((res) => {
-      var BTCAmt = parseFloat(res['a:BTC:cds']);
-      var feeUSDAmt = parseFloat(res['tfa:USD']);
-      var txUSDAmt = parseFloat(res['tta:USD']);
-      
-      var buyData = {
-        orderId: orderId,
-        BTCAmt: BTCAmt,
-        txPrice: (1/BTCAmt) * txUSDAmt,
-        txAmt : (txUSDAmt + feeUSDAmt),
-        fee: feeUSDAmt,
-        finAmt: txUSDAmt
-      };
-      console.log('buy data',buyData);
-      return buyData;
-    });
-  });
-};
-
-var sellCEX = function(sellAmt){
-  var sellAmt = 0; //testing only, to replace with development
-  CEX.BTC_placeMarketOrder("sell",sellAmt).then((res) => {
-    console.log('sell response',res);
-    var orderId = res.orderId;
-
-    CEX.getOrderDetails(orderId).then((res) => {
-      var BTCAmt = parseFloat(res['a:BTC:cds']);
-      var feeUSDAmt = parseFloat(res['tfa:USD']);
-      var txUSDAmt = parseFloat(res['tta:USD']);
-      
-      var sellData = {
-        orderId: orderId,
-        BTCAmt: BTCAmt,
-        txPrice: (1/BTCAmt) * txUSDAmt,
-        txAmt : txUSDAmt,
-        fee: feeUSDAmt,
-        finAmt: txUSDAmt - feeUSDAmt
-      };
-      console.log('sell data',sellData);
-      return sellData;
-    });
-  });
-};
-
-
 var sell = function(thread, price){
   if(thread && price){
-    //console.log("terminating thread..", thread);
-      
     var end = new Date();
       
     //======================CEX SELL========================
@@ -593,32 +504,17 @@ var sell = function(thread, price){
           console.log('sell data',sellData);
             
           //==================APP OPS===================
-          //var btcx = thread.bitcoin; //development
           var btcx = sellData.BTCAmt; //deployment
-
-          //var feex = 0; //development
-          var feex = sellData.fee; //deployment 
-
-          //var sellx = parseFloat(thread.bitcoin * price); //development
+          var feex = sellData.fee; //deployment
           var sellx = sellData.txAmt; //deployment 
-
-          //var orderx = thread.id; //development
           var orderx = sellData.orderId; //deployment
-
-          //var pricex = price; //development
           var pricex = sellData.txPrice; //deployment
-
           var tpricex = price; //deployment & development
-
-          //var exitx = sellx; //development
           var exitx = sellData.finAmt; //deployment
-          
-          //var profitx = parseFloat(exitx - thread.amount); //development
           var profitx = parseFloat(sellData.finAmt - thread.amount); //deployment
-
+          
           var endMoment = moment(end).format();
           var startMoment = moment(thread.startDate).format();
-          
           var periodx_ = moment(endMoment).diff(moment(startMoment));
           var periodx = parseInt(periodx_/1000); //in seconds
           
@@ -640,14 +536,8 @@ var sell = function(thread, price){
           }
           var endThread = {
             //id : thread.id,
-            //parent : thread.parent,
-            //startDate : thread.startDate,
             endDate : end,
             active : false,
-            //limit : thread.limit,
-            //amount : thread.amount,
-            //bitcoin : thread.bitcoin,
-            //startPrice : thread.price,
             exitAmount : parseFloat(exitx),
             endTixPrice : parseFloat(tpricex),
             endPrice : parseFloat(pricex),
@@ -662,7 +552,7 @@ var sell = function(thread, price){
             BTCUSDThread.findOneAndUpdate({id: thread.id}, endThread, {new: true}, function(err, xThread) {
               if (err)
               throw err;
-              console.log("updated thread after selling",xThread);
+              //updated thread after selling
               var lineProfx = 0;
               var aCycle = 0;
               var checkPeriod = [];
@@ -672,12 +562,10 @@ var sell = function(thread, price){
               if (Array.isArray(checkLines) === true && checkLines.length > 0){
                 for (var i = 0; i < checkLines.length; i++) { 
                   if(checkLines[i].id == thread.parent){
-                    console.log("entered line item",checkLines[i]);
                     lineProfx = checkLines[i].profitToDate;
                     startx = checkLines[i].startDate;
                     aCycle = parseInt(checkLines[i].cycles) + 1;
                     checkPeriod = checkLines[i].averagePeriod;
-                    console.log("period before..........", checkPeriod);
                     if (checkPeriod == null){
                      checkPeriod = [];
                     }
@@ -685,13 +573,10 @@ var sell = function(thread, price){
                      checkPeriod = [];
                     }
                     checkPeriod.push(periodx);
-                    //console.log("periodx", periodx);
-                    console.log("period after..........", checkPeriod);
                     var endLine = {
                       id : thread.parent,
                       limit : thread.limit,
                       startDate : startx,
-                      //endDate : null,
                       active : false,
                       profitToDate : parseFloat(lineProfx) + parseFloat(profitx),
                       averagePeriod : checkPeriod,
@@ -745,16 +630,12 @@ var sell = function(thread, price){
 
 var buy = function(line, price){
     if (line && price){
-      //define thread object
-      //var xLimit = app.get("limit");
-      //var xAmt = app.get("amount"); //deprecated
-      var xAmt = 0.003 * price;
+      var xAmt = app.get("baseAmount");
       var xCurrency = app.get("currency");
       var updatedDate = new Date();
 
       //=============== CEX deployment =================
-      startThread(line, xAmt, price, updatedDate, xCurrency); 
-      //startThread(line, price, updatedDate, xCurrency);
+      startThread(line, xAmt, price, updatedDate, xCurrency);
     }
 };
 
@@ -765,12 +646,19 @@ var buy = function(line, price){
 var iterate = function(){
 	saveRecord();
 	checkDatabase();
-	//analyseData();
+};
+
+
+var subiterate = function() {
+  var a = setInterval(function(){
+    iterate();
+    clearInterval(a);
+    subiterate();
+  }, 15000);
 };
 
 exports.execute = function(){
-	setInterval(iterate, 15000);
-
+	subiterate();
   // CEX.BTC_placeMarketOrder("sell",0.01).then((res) => {
   //     console.log('sell response',res);
   // });
