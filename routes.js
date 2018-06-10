@@ -3,6 +3,8 @@ var xScraperController = require('./controller.js');
 //localhost:3000/<route>
 module.exports = function(app){
 	app.route('/').get(xScraperController.getHome);
+
+	app.route('/limits').get(xScraperController.getLimits);	
 	
 	app.route('/account').get(xScraperController.getAccount);
 
@@ -17,7 +19,16 @@ module.exports = function(app){
 
 	app.route('/threads').get(xScraperController.getThreads);
 
+	app.route('/threads/active').get(xScraperController.getActiveThreads);
 
 	app.route('/priceBTCUSD').get(xScraperController.getPriceBTCUSD);
+
+	app.route('/forcesell/:threadId').get(xScraperController.forceSell);	
+
+	app.route('/manual/trades').get(xScraperController.manualTrades);	
+
+	app.route('/manual/buy/:usd').get(xScraperController.manualBuy);	
+
+	app.route('/manual/sell/:btc').get(xScraperController.manualSell);	
 }
 

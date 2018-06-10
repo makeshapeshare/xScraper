@@ -12,6 +12,7 @@ var BTCUSDAve = require('./models/model_Ave');
 var BTCUSDLine = require('./models/model_Line');
 var BTCUSDThread = require('./models/model_Thread');
 var BTCUSDProfit = require('./models/model_Profit');
+var BTCUSDManual = require('./models/model_Manual');
 
 
 var CEX = require('./cex.js');
@@ -45,6 +46,7 @@ app.set('totalProfits', 0);
 
 app.set('limit', 0.05);
 app.set('baseAmount', 50);
+app.set('deltaRate', 0);
 
 //========================= GENERAL ============================
 
@@ -101,6 +103,55 @@ var idGenerator = function(inputDate){
     return id;
 };
 
+var rangeDateGen = function(momentDate){
+  //note input is already moment format
+  var idA = momentDate.year();
+  var idB = momentDate.month();
+  var idC = momentDate.date();
+  var idD = momentDate.hour();
+  var idE = momentDate.minute();
+  var idF = momentDate.second();
+  
+  idB = idB + 1;
+  if (idB.toString().length < 2){
+    idB = "0".concat(idB.toString());
+  }
+  if (idC.toString().length < 2){
+    idC = "0".concat(idC.toString());
+  }
+  if (idD.toString().length < 2){
+    idD = "0".concat(idD.toString());
+  }
+  if (idE.toString().length < 2){
+    idE = "0".concat(idE.toString());
+  }
+  if (idF.toString().length < 2){
+    idF = "0".concat(idF.toString());
+  }
+
+  var output = idA.toString().concat(idB,idC,idD,idE,idF);
+
+  return output;
+};
+
+var getRange = function(inputDate){
+  var lowLimit = 0;
+  var highLimit = 0;
+  
+  var beforeDate = moment(inputDate).subtract(3,'hours');
+  var checkDate = moment(inputDate);
+
+  lowLimit = parseInt(rangeDateGen(beforeDate));
+  highLimit = parseInt(rangeDateGen(checkDate));
+  
+  var range = {
+    low: lowLimit,
+    high: highLimit
+  };
+
+  return range;
+};
+
 //========================= FETCH ============================
 
 //get latest market price from exchange api
@@ -135,7 +186,7 @@ var checkDatabase = function(){
     //only return 2 days
     BTCUSDRecord.find( {id: {$gt: lowerLim, $lt: upperLim}},function (err, records) {
     if (err) return console.error(err);
-    
+    //console.log("day records: ", records);
     aggregateData(records);
     
     //get aggregates when done
@@ -144,6 +195,7 @@ var checkDatabase = function(){
     BTCUSDAve.find({id: {$gt: aveLowLim, $lt: aveUppLim}},function (err, aggregates) {
       if (err) return console.error(err);
       app.set('aggregates', aggregates);
+      //console.log("aggregates: ", aggregates);
 
       //get lines when done
       BTCUSDLine.find(function (err, lines) {
@@ -186,18 +238,27 @@ var aggregateData = function(data){
     var hourSum = 0;
     var daySum = 0;
     
+    var rangeSet = [];
+
     var checkYear = app.get('thisYr');
     var checkMonth = app.get('thisMth');
     var checkDate = app.get('thisDay');
     var checkHour = app.get('thisHr');
     
+    var checkLowest = null;
+    var checkLow = null;
+    var checkRange = getRange(new Date());
+
     if (data && data.length){
+      
       for (var i = 0; i < data.length; i++) { 
-        var dataID = data[i].id.toString();
+        var checkID = parseInt(data[i].id); 
+        var dataID = checkID.toString();
         var dataYear = dataID.substr(0, 4);
         var dataMonth = dataID.substr(4, 2);
         var dataDate = dataID.substr(6, 2);
         var dataHour = dataID.substr(8, 2);
+
         
         if (dataYear == checkYear && dataMonth == checkMonth && dataDate == checkDate && dataHour == checkHour){
           hourSet.push(data[i]);
@@ -205,9 +266,13 @@ var aggregateData = function(data){
         if (dataYear == checkYear && dataMonth == checkMonth && dataDate == checkDate){
           daySet.push(data[i]);
         }
+
+        if(checkID > parseInt(checkRange.low) && checkID < parseInt(checkRange.high)){
+          rangeSet.push(data[i]);
+        }
       }
 
-      //perform hour aggregation
+      //perform hour aggregation and extract lowest
       for (var i = 0; i < hourSet.length; i++) { 
         hourSum = hourSum + hourSet[i].price;
       }
@@ -216,6 +281,24 @@ var aggregateData = function(data){
       for (var i = 0; i < daySet.length; i++) { 
         daySum = daySum + daySet[i].price;
       }
+
+      //perform range check
+      if(rangeSet && rangeSet.length > 0){
+        //console.log("rangeset",rangeSet);
+        for (var i = 0; i < rangeSet.length; i++) { 
+          if(i == 0){
+            checkLowest = rangeSet[i];
+          } else{
+            //checkLow = rangeSet[i];
+            if(rangeSet[i].price < checkLowest.price){
+              checkLowest = rangeSet[i];
+            }   
+          }
+        }
+        //console.log("lowest",checkLowest);
+      }
+
+      //console.log("day set: ", daySet);
       
       if (hourSum != 0 && daySum != 0){
         var hourAve = hourSum/hourSet.length;
@@ -259,6 +342,20 @@ var aggregateData = function(data){
         app.set('aveDay', dayAve.toFixed(2));
         app.set('aveHr', hourAve.toFixed(2));
       }
+
+      //calculate delta rate
+      var dataLength = data.length;
+      if (dataLength && dataLength > 0 && checkLowest && checkLowest != null){
+
+        var mostRecent = data[dataLength - 1];
+        var delta = mostRecent.price - checkLowest.price;
+        var deltaRate = delta/mostRecent.price;
+        //console.log("most recent: ", mostRecent);
+        //console.log("checkLowest: ", checkLowest);
+        //console.log("delta rate check lowest: ", deltaRate);
+        app.set('deltaRate', deltaRate);
+      }
+      
       
     }
 };
@@ -266,14 +363,19 @@ var aggregateData = function(data){
 //========================= ANALYSE ============================
 
 var analyseTrend = function(){
+    
     var currentPrice = app.get("currentPrice");
     var currentHrAve = app.get("aveHr");
-    if (currentPrice && currentHrAve && currentPrice != 0 && currentHrAve != 0){
-      if(currentPrice > currentHrAve){
-        //rising trend
+    var deltaRate = app.get("deltaRate");
+    var controlRate = app.get("limit")/3;
+    if (currentPrice && currentHrAve && deltaRate && currentPrice != 0 && currentHrAve != 0 && deltaRate > 0){
+      //condition A : current price above average price
+      //condition B : if delta rate of increase above control rate, true
+      if(currentPrice > currentHrAve && deltaRate > controlRate){
+        //satisfied
         return true;
       }else{
-        //falling trend
+        //not satisfied
         return false;
       }  
     } else{
@@ -674,7 +776,142 @@ exports.execute = function(){
 };
 
 exports.pressStartLine = function(){
-	var currentPrice = app.get("currentPrice");
-	var res = startLine(currentPrice);
-	return res;
+	var res = null;
+  var currentPrice = app.get("currentPrice");
+  //only start line if there is sufficient funds
+  var xAmt = app.get("baseAmount");
+  var acc = CEX.getAccountBalance();
+  if (acc.USD.available > xAmt){
+    res = startLine(currentPrice);
+  }
+
+  return res;
+  // if (acc.USD.available > xAmt){
+  //   res = {
+  //     status: "error. insufficient funds",
+  //     line: null,
+  //     thread: null
+  //   };
+  //   //res = startLine(currentPrice);
+  //   return res;
+  // } else{
+  //   res = "error. insufficient funds";
+  //   return res;
+  // }
+
 };
+
+exports.forceSell = function(threadid){
+  var currentPrice = app.get("currentPrice");
+  console.log("server force sell ",threadid);
+  BTCUSDThread.findOne({ id: threadid }, function(err, eThread) {
+    console.log("detected ethread",eThread);
+    //if (err) return console.error(err);
+    if (eThread && eThread.id.toString() == threadid.toString()){
+      console.log("detected thread to force sell ",eThread);
+      sell(eThread, currentPrice);
+      return threadid;
+    } else{ 
+      return "error thread not found";
+    }
+  });
+};
+
+exports.manualBuy = function(usd){
+  console.log("server manual buy ",usd);
+  var currentPrice = app.get("currentPrice");
+
+  CEX.BTC_placeMarketOrder("buy",usd).then((res) => {
+    console.log('buy response',res);
+
+    if(res && res.id && res.id != null){
+
+      var orderId = res.id;
+      var orderDate = new Date();
+
+      CEX.getOrderDetails(orderId).then((response) => {
+        var BTCAmt = parseFloat(response['a:BTC:cds']);
+        var feeUSDAmt = parseFloat(response['tfa:USD']);
+        var txUSDAmt = parseFloat(response['tta:USD']);
+            
+        var addManual = {
+          orderId: orderId,
+          type: "buy",
+          txDate: orderDate,
+          amount: usd,
+          bitcoin: BTCAmt,
+          txAmt : (txUSDAmt + feeUSDAmt),
+          fee: feeUSDAmt,
+          finAmt: txUSDAmt,
+          txPrice: currentPrice,
+          txTixPrice: (1/BTCAmt) * txUSDAmt,
+          currency: "BTCUSD"
+        };
+
+        console.log('buy data',addManual);
+        
+        var newManual = new BTCUSDManual(addManual);
+        newManual.save(function (err, xManual) {
+          if (err) return console.error(err);
+          console.log("new manual trade",xManual);
+        });
+      });
+      return usd;
+    }
+    else{
+      return "manual buy error";
+    }
+  });
+};
+
+exports.manualSell = function(btc){
+  console.log("server manual sell ",btc);
+  var currentPrice = app.get("currentPrice");
+
+  CEX.BTC_placeMarketOrder("sell",btc).then((res) => { 
+    console.log('sell response',res);
+
+    if(res && res.id && res.id != null){
+
+      var orderId = res.id;
+      var orderDate = new Date();
+
+      CEX.getOrderDetails(orderId).then((response) => {
+        var BTCAmt = parseFloat(response['a:BTC:cds']);
+        var feeUSDAmt = parseFloat(response['tfa:USD']);
+        var txUSDAmt = parseFloat(response['tta:USD']);
+        
+        var addManual = {
+          orderId: orderId,
+          type: "sell",
+          txDate: orderDate,
+          amount: txUSDAmt - feeUSDAmt,
+          bitcoin: BTCAmt,
+          txAmt : txUSDAmt,
+          fee: feeUSDAmt,
+          finAmt: txUSDAmt - feeUSDAmt,
+          txPrice: currentPrice,
+          txTixPrice: (1/BTCAmt) * txUSDAmt,
+          currency: "BTCUSD"
+        };
+        
+        console.log('sell data',addManual);
+        
+        var newManual = new BTCUSDManual(addManual);
+        newManual.save(function (err, xManual) {
+          if (err) return console.error(err);
+          console.log("new manual trade",xManual);
+        });
+      });
+      return btc;
+    }
+    else{
+      return "manual buy error";
+    }
+  });
+};
+
+
+
+
+
