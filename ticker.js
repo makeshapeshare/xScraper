@@ -777,13 +777,18 @@ exports.execute = function(){
 
 exports.pressStartLine = function(){
 	var res = null;
+  var acc = null;
   var currentPrice = app.get("currentPrice");
   //only start line if there is sufficient funds
-  var xAmt = app.get("baseAmount");
-  var acc = CEX.getAccountBalance();
-  if (acc.USD.available > xAmt){
-    res = startLine(currentPrice);
-  }
+  var xAmt = parseInt(app.get("baseAmount"));
+  CEX.getAccountBalance().then((res) => {
+    acc = res;
+    console.log('acc is',acc);
+    if (acc.USD.available > xAmt){
+      res = startLine(currentPrice);
+    }
+    return res;
+  });
 
   return res;
   // if (acc.USD.available > xAmt){
