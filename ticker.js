@@ -44,7 +44,7 @@ app.set('totalSeed', 0);
 app.set('totalThreadValue', 0);
 app.set('totalProfits', 0);
 
-app.set('limit', 0.05);
+app.set('limit', 0.03);
 app.set('baseAmount', 50);
 app.set('deltaRate', 0);
 
