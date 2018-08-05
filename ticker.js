@@ -367,7 +367,8 @@ var analyseTrend = function(){
     var currentPrice = app.get("currentPrice");
     var currentHrAve = app.get("aveHr");
     var deltaRate = app.get("deltaRate");
-    var controlRate = app.get("limit")/3;
+    var controlRate = app.get("limit")/2;
+    
     if (currentPrice && currentHrAve && deltaRate && currentPrice != 0 && currentHrAve != 0 && deltaRate > 0){
       //condition A : current price above average price
       //condition B : if delta rate of increase above control rate, true
@@ -388,16 +389,20 @@ var analyseData = function(){
     var currentPrice = app.get("currentPrice");
     var mylines = app.get("lines");
     var mythreads = app.get("threads");
+    var deltaRate = app.get("deltaRate");
+    //console.log("check delta.",deltaRate);
 
     if (currentPrice && mylines && mythreads){
       //check for inactive lines to buy
       for (var j = 0; j < mylines.length; j++) { 
         var thisLine = mylines[j];
+        
         if(thisLine.active === false){
           //inactive thread, decide by trend
           if (analyseTrend() === true){
             //upward trend, buy and start new thread
             console.log("up trend. BUY");
+            //in dev, disable buy
             buy(thisLine, currentPrice);
           } else{
             //downward trend, wait
@@ -414,6 +419,7 @@ var analyseData = function(){
           if (currentPrice > thisThread.startPrice && (currentPrice - thisThread.startPrice) > (thisThread.limit * thisThread.startPrice) ){
             //profit hit, sell
             console.log("profit. SELL", thisThread.id);
+            //in dev, disable sell
             sell(thisThread, currentPrice);
           } else{
             //continue to wait
@@ -659,14 +665,21 @@ var sell = function(thread, price){
               var aCycle = 0;
               var checkPeriod = [];
               var startx = null;
+              var lineAmt = 50;
+              var allProfit = 0;
               
               //update lines with metadata
               if (Array.isArray(checkLines) === true && checkLines.length > 0){
                 for (var i = 0; i < checkLines.length; i++) { 
                   if(checkLines[i].id == thread.parent){
+                    if(checkLines[i].amount && checkLines[i].amount != null){
+                      lineAmt = checkLines[i].amount;  
+                    }
                     lineProfx = checkLines[i].profitToDate;
                     startx = checkLines[i].startDate;
                     aCycle = parseInt(checkLines[i].cycles) + 1;
+                    
+                    //check period
                     checkPeriod = checkLines[i].averagePeriod;
                     if (checkPeriod == null){
                      checkPeriod = [];
@@ -675,12 +688,20 @@ var sell = function(thread, price){
                      checkPeriod = [];
                     }
                     checkPeriod.push(periodx);
+                    
+                    //check doubling
+                    allProfit = parseFloat(lineProfx) + parseFloat(profitx);
+                    if (allProfit > 1.1 * lineAmt){
+                      lineAmt = lineAmt * 2;
+                    }
+
                     var endLine = {
                       id : thread.parent,
                       limit : thread.limit,
+                      amount : lineAmt,
                       startDate : startx,
                       active : false,
-                      profitToDate : parseFloat(lineProfx) + parseFloat(profitx),
+                      profitToDate : allProfit,
                       averagePeriod : checkPeriod,
                       cycles : aCycle
                     };
@@ -731,8 +752,11 @@ var sell = function(thread, price){
 
 
 var buy = function(line, price){
+    var xAmt = app.get("baseAmount");
     if (line && price){
-      var xAmt = app.get("baseAmount");
+      if (line.amount && line.amount > 0){
+        xAmt = line.amount;
+      }
       var xCurrency = app.get("currency");
       var updatedDate = new Date();
 
